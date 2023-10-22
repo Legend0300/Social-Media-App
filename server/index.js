@@ -1,7 +1,10 @@
 const express = require('express');
+const connect = require('./config/dbConnection');
 const app = express();
 
 app.use(express.static('public'));
+
+connect();
 
 
 app.get('/', (req, res) => {

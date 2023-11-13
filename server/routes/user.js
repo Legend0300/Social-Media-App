@@ -51,6 +51,7 @@ router.post('/login', async (req, res) => {
         expiresIn: '1h', // Token expiration time (adjust as needed)
       });
   
+      res.cookie('token', token, { httpOnly: true });
       res.status(200).json({ token });
     } catch (err) {
       console.error(err);
@@ -63,15 +64,30 @@ router.post('/login', async (req, res) => {
     // Clear the JWT token from the client-side storage
     // (e.g. local storage or cookies)
     // ...
+
+    
   
     res.status(200).json({ message: 'Logout successful' });
   });
   
 
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+      const user = await User.findById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+      res.status(200).json(user);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
 // Follow a user
-router.post('/users/:id/follow', async (req, res) => {
-    const userId = req.params.id;
-    const followerId = req.user._id;
+router.post('/follow', authMiddleware ,async (req, res) => {
+    const userId = req.body.followId;
+    const followerId = req.user.userId;
 
     try {
         // Find the user to follow
@@ -83,18 +99,18 @@ router.post('/users/:id/follow', async (req, res) => {
         }
 
         // Check if the current user is already following the user
-        const isAlreadyFollowing = userToFollow.followers.some(follower => follower.user.equals(followerId));
+        const isAlreadyFollowing = userToFollow.followers.some(follower => follower.equals(followerId));
         if (isAlreadyFollowing) {
             return res.status(400).json({ message: 'You are already following this user' });
         }
-
+     
         // Add the current user to the user's followers list
-        userToFollow.followers.push({ user: followerId });
+        userToFollow.followers.push(followerId);
         await userToFollow.save();
 
         // Add the user to the current user's following list
         const currentUser = await User.findById(followerId);
-        currentUser.following.push({ user: userId });
+        currentUser.following.push(userId);
         await currentUser.save();
 
         res.status(200).json({ message: 'User followed successfully' });
@@ -105,9 +121,9 @@ router.post('/users/:id/follow', async (req, res) => {
 });
 
 // Unfollow a user
-router.post('/users/:id/unfollow', async (req, res) => {
-    const userId = req.params.id;
-    const followerId = req.user._id;
+router.post('/unfollow', authMiddleware ,async (req, res) => {
+    const userId = req.body.unfollowId;
+    const followerId = req.user.userId;
 
     try {
         // Find the user to unfollow
@@ -119,18 +135,18 @@ router.post('/users/:id/unfollow', async (req, res) => {
         }
 
         // Check if the current user is already following the user
-        const isAlreadyFollowing = userToUnfollow.followers.some(follower => follower.user.equals(followerId));
+        const isAlreadyFollowing = userToUnfollow.followers.some(follower => follower.equals(followerId));
         if (!isAlreadyFollowing) {
             return res.status(400).json({ message: 'You are not following this user' });
         }
 
         // Remove the current user from the user's followers list
-        userToUnfollow.followers = userToUnfollow.followers.filter(follower => !follower.user.equals(followerId));
+        userToUnfollow.followers = userToUnfollow.followers.filter(follower => !follower.equals(followerId));
         await userToUnfollow.save();
 
         // Remove the user from the current user's following list
         const currentUser = await User.findById(followerId);
-        currentUser.following = currentUser.following.filter(follow => !follow.user.equals(userId));
+        currentUser.following = currentUser.following.filter(follow => !follow.equals(userId));
         await currentUser.save();
 
         res.status(200).json({ message: 'User unfollowed successfully' });
@@ -141,37 +157,34 @@ router.post('/users/:id/unfollow', async (req, res) => {
 });
 
 // Read all users
-router.get('/users', (req, res) => {
-    User.find({}, (err, users) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send('Error getting users');
-        } else {
-            console.log('All users:', users);
-            res.status(200).json(users);
-        }
-    });
+router.get('/', async (req, res, next) => {
+    try {
+        const users = await User.find({});
+        console.log('All users:', users);
+        res.status(200).json(users);
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
 });
 
 // Read a single user by ID
-router.get('/users/:id', (req, res) => {
-    const userId = req.params.id;
-
-    User.findById(userId, (err, user) => {
-        if (err) {
-            console.error(err);
-            res.status(500).send('Error getting user');
-        } else if (!user) {
-            res.status(404).send('User not found');
-        } else {
-            console.log('User found:', user);
-            res.status(200).json(user);
+router.get('/:id', async (req, res, next) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) {
+            return res.status(404).send('User not found');
         }
-    });
+        console.log('User found:', user);
+        res.status(200).json(user);
+    } catch (err) {
+        console.error(err);
+        next(err);
+    }
 });
 
 // Update a user by ID
-router.put('/users/:id', (req, res) => {
+router.put('/:id', (req, res) => {
     const userIdToUpdate = req.params.id;
 
     User.findByIdAndUpdate(userIdToUpdate, { name: req.body.name, bio: req.body.bio }, { new: true }, (err, user) => {
@@ -188,7 +201,7 @@ router.put('/users/:id', (req, res) => {
 });
 
 // Delete a user by ID
-router.delete('/users/:id', (req, res) => {
+router.delete('/:id', (req, res) => {
     const userIdToDelete = req.params.id;
 
     User.findByIdAndDelete(userIdToDelete, (err, user) => {
@@ -203,5 +216,8 @@ router.delete('/users/:id', (req, res) => {
         }
     });
 });
+
+
+
 
 module.exports = router;

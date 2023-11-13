@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 // Middleware for JWT authentication
 function authMiddleware(req, res, next) {
   // Get the token from the request header
-    const token = req.header('x-auth-token') || req.header('authorization');
+    const token = req.cookies.token || '';
 
   // Check if token is present
   if (!token) {
@@ -12,7 +12,7 @@ function authMiddleware(req, res, next) {
 
   try {
     // Verify and decode the token
-    const decoded = jwt.verify(token, 'your-secret-key'); // Replace with your secret key
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // Replace with your secret key
     req.user = decoded;
     next();
   } catch (ex) {
